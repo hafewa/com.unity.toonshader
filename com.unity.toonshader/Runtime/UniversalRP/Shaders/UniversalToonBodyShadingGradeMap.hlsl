@@ -82,6 +82,10 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
     const float4 highlightTex = tex2D(_HighColor_Tex, TRANSFORM_TEX(Set_UV0, _HighColor_Tex));
     const float4 highlightMaskTex = tex2D(_Set_HighColorMask, TRANSFORM_TEX(Set_UV0, _Set_HighColorMask));
 
+    const float3 baseAlbedo = _BaseColor.rgb * mainTex.rgb;
+    const float3 firstShadeAlbedo = _1st_ShadeColor.rgb * firstShadeTex.rgb;
+    const float3 secondShadeAlbedo = _2nd_ShadeColor.rgb * secondShadeTex.rgb;
+    
 #ifdef _DBUFFER
     ApplyDecalToSurfaceDataUTS(input.positionCS, mainTex.rgb, surfaceData, normalDirection);
 #endif
@@ -135,12 +139,10 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
 
 #ifdef _IS_PASS_FWDBASE
     float3 Set_LightColor = lightColor.rgb;
-    float3 Set_BaseColor = lerp((mainTex.rgb * _BaseColor.rgb),
-        ((mainTex.rgb * _BaseColor.rgb) * Set_LightColor), _Is_LightColor_Base);
+    float3 Set_BaseColor = lerp((baseAlbedo), (baseAlbedo * Set_LightColor), _Is_LightColor_Base);
     //v.2.0.5
-    float3 _Is_LightColor_1st_Shade_var = lerp((firstShadeTex.rgb * _1st_ShadeColor.rgb),((firstShadeTex.rgb * _1st_ShadeColor.rgb) * Set_LightColor), _Is_LightColor_1st_Shade);
+    float3 _Is_LightColor_1st_Shade_var = lerp(firstShadeAlbedo,(firstShadeAlbedo * Set_LightColor), _Is_LightColor_1st_Shade);
     float _HalfLambert_var = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
-    // Half Lambert
 
     //v.2.0.6
     float4 _ShadingGradeMap_var = tex2Dlod(_ShadingGradeMap,
@@ -432,11 +434,10 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
     //v.2.0.5: Filtering the high intensity zone of PointLights
     float3 Set_LightColor = lightColor;
     //
-    float3 Set_BaseColor = lerp((_BaseColor.rgb * mainTex.rgb * _LightIntensity),
-        ((_BaseColor.rgb * mainTex.rgb) * Set_LightColor), _Is_LightColor_Base);
+    float3 Set_BaseColor = lerp((baseAlbedo * _LightIntensity), (baseAlbedo * Set_LightColor), _Is_LightColor_Base);
     //v.2.0.5
-    float3 Set_1st_ShadeColor = lerp((_1st_ShadeColor.rgb * firstShadeTex.rgb * _LightIntensity),((_1st_ShadeColor.rgb * firstShadeTex.rgb) * Set_LightColor), _Is_LightColor_1st_Shade);
-    float3 Set_2nd_ShadeColor = lerp((_2nd_ShadeColor.rgb * secondShadeTex.rgb * _LightIntensity),((_2nd_ShadeColor.rgb * secondShadeTex.rgb) * Set_LightColor), _Is_LightColor_2nd_Shade);
+    float3 Set_1st_ShadeColor = lerp((firstShadeAlbedo * _LightIntensity),(firstShadeAlbedo * Set_LightColor), _Is_LightColor_1st_Shade);
+    float3 Set_2nd_ShadeColor = lerp((secondShadeAlbedo * _LightIntensity),(secondShadeAlbedo * Set_LightColor), _Is_LightColor_2nd_Shade);
     float _HalfLambert_var = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
 
     // float4 _Set_2nd_ShadePosition_var = tex2D(_Set_2nd_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_2nd_ShadePosition));
@@ -551,12 +552,11 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
         notDirectional);
     //v.2.0.5: Filtering the high intensity zone of PointLights
     float3 Set_LightColor = lightColor;
-    //
-    float3 Set_BaseColor = lerp((_BaseColor.rgb * mainTex.rgb * _LightIntensity),
-        ((_BaseColor.rgb * mainTex.rgb) * Set_LightColor), _Is_LightColor_Base);
+    float3 Set_BaseColor = lerp((baseAlbedo * _LightIntensity), (baseAlbedo * Set_LightColor), _Is_LightColor_Base);
+        
     //v.2.0.5
-    float3 Set_1st_ShadeColor = lerp((_1st_ShadeColor.rgb * firstShadeTex.rgb * _LightIntensity),((_1st_ShadeColor.rgb * firstShadeTex.rgb) * Set_LightColor), _Is_LightColor_1st_Shade);
-    float3 Set_2nd_ShadeColor = lerp((_2nd_ShadeColor.rgb * secondShadeTex.rgb * _LightIntensity),((_2nd_ShadeColor.rgb * secondShadeTex.rgb) * Set_LightColor), _Is_LightColor_2nd_Shade);
+    float3 Set_1st_ShadeColor = lerp((firstShadeAlbedo * _LightIntensity),(firstShadeAlbedo * Set_LightColor), _Is_LightColor_1st_Shade);
+    float3 Set_2nd_ShadeColor = lerp((secondShadeAlbedo * _LightIntensity),(secondShadeAlbedo * Set_LightColor), _Is_LightColor_2nd_Shade);
     float _HalfLambert_var = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
 
     // float4 _Set_2nd_ShadePosition_var = tex2D(_Set_2nd_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_2nd_ShadePosition));
