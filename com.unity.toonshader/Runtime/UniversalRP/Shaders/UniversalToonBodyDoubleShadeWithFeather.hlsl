@@ -9,11 +9,6 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
     const float3x3 tangentTransform = float3x3(i.tangentDir, i.bitangentDir, i.normalDir);
     const float2 Set_UV0 = i.uv0;
 
-    const float3 normalTex = UnpackNormalScale(
-        SAMPLE_TEXTURE2D(_NormalMap, sampler_MainTex, TRANSFORM_TEX(Set_UV0, _NormalMap)), _BumpScale);
-    const float3 normalDirection = normalize(mul(normalTex, tangentTransform)); // Perturbed normals
-
-
     // todo. not necessary to calc gi factor in  shadowcaster pass.
     SurfaceData surfaceData;
     InitializeStandardLitSurfaceDataUTS(i.uv0, surfaceData);
@@ -73,15 +68,20 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
 
     const float2 mainTexUV = TRANSFORM_TEX(i.uv0, _MainTex);
     
-    const float4 mainTex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, mainTexUV);
+    float4 tempMainTex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, mainTexUV);
     const float4 firstShadePosTex = tex2D(_Set_1st_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_1st_ShadePosition));
     const float4 secondShadePosTex = tex2D(_Set_2nd_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_2nd_ShadePosition));
     const float4 highlightTex = tex2D(_HighColor_Tex, TRANSFORM_TEX(Set_UV0, _HighColor_Tex));
     const float4 highlightMaskTex = tex2D(_Set_HighColorMask, TRANSFORM_TEX(Set_UV0, _Set_HighColorMask));
 
-#ifdef _DBUFFER
-    ApplyDecalToSurfaceDataUTS(input.positionCS, mainTex.rgb, surfaceData, normalDirection);
-#endif
+    const float3 normalTex = UnpackNormalScale(
+        SAMPLE_TEXTURE2D(_NormalMap, sampler_MainTex, TRANSFORM_TEX(Set_UV0, _NormalMap)), _BumpScale);
+    float3 tempNormalWS = normalize(mul(normalTex, tangentTransform)); // Perturbed normals
+    
+    //Decal
+    ApplyDecalToSurfaceDataUTS(input.positionCS, tempMainTex.rgb, surfaceData, tempNormalWS);
+    const float4 mainTex = tempMainTex;
+    const float3 normalDirection = tempNormalWS;
 
     //v.2.0.4
 #if defined(_IS_CLIPPING_MODE)
