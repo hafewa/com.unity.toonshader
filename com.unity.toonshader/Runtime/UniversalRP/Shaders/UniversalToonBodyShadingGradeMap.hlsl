@@ -112,6 +112,9 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
 #endif
 
 
+    const float firstStepMinusFeather = _1st_ShadeColor_Step - _1st_ShadeColor_Feather;
+    const float secondStepMinusFeather = _2nd_ShadeColor_Step - _2nd_ShadeColor_Feather;
+    
     //v.2.0.4
 
     float3 defaultLightDirection = normalize(UNITY_MATRIX_V[2].xyz + UNITY_MATRIX_V[1].xyz);
@@ -141,7 +144,7 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
     float3 Set_BaseColor = lerp((baseAlbedo), (baseAlbedo * Set_LightColor), _Is_LightColor_Base);
     //v.2.0.5
     float3 _Is_LightColor_1st_Shade_var = lerp(firstShadeAlbedo,(firstShadeAlbedo * Set_LightColor), _Is_LightColor_1st_Shade);
-    float _HalfLambert_var = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
+    float halfLambert = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
 
     //v.2.0.6
     float4 _ShadingGradeMap_var = tex2Dlod(_ShadingGradeMap,
@@ -161,20 +164,20 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
                                           ? _ShadingGradeMap_var.r + _Tweak_ShadingGradeMapLevel
                                           : 1;
 
-    float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var) * lerp(_HalfLambert_var,
-        (_HalfLambert_var * saturate(_SystemShadowsLevel_var)), _Set_SystemShadowsToBase);
+    float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var) * lerp(halfLambert,
+        (halfLambert * saturate(_SystemShadowsLevel_var)), _Set_SystemShadowsToBase);
 
-    //float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var)*lerp( _HalfLambert_var, (_HalfLambert_var*saturate(1.0+_Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase );
+    //float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var)*lerp( halfLambert, (halfLambert*saturate(1.0+_Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase );
 
     //
     float Set_FinalShadowMask = saturate(
-        (1.0 + ((Set_ShadingGrade - (_1st_ShadeColor_Step - _1st_ShadeColor_Feather)) * (0.0 - 1.0)) / (
-            _1st_ShadeColor_Step - (_1st_ShadeColor_Step - _1st_ShadeColor_Feather)))); // Base and 1st Shade Mask
+        (1.0 + ((Set_ShadingGrade - firstStepMinusFeather) * (0.0 - 1.0)) / (
+            _1st_ShadeColor_Step - firstStepMinusFeather))); // Base and 1st Shade Mask
     float3 _BaseColor_var = lerp(Set_BaseColor, _Is_LightColor_1st_Shade_var, Set_FinalShadowMask);
     //v.2.0.5
     float Set_ShadeShadowMask = saturate(
-        (1.0 + ((Set_ShadingGrade - (_2nd_ShadeColor_Step - _2nd_ShadeColor_Feather)) * (0.0 - 1.0)) / (
-            _2nd_ShadeColor_Step - (_2nd_ShadeColor_Step - _2nd_ShadeColor_Feather)))); // 1st and 2nd Shades Mask
+        (1.0 + ((Set_ShadingGrade - secondStepMinusFeather) * (0.0 - 1.0)) / (
+            _2nd_ShadeColor_Step - secondStepMinusFeather))); // 1st and 2nd Shades Mask
     //Composition: 3 Basic Colors as Set_FinalBaseColor
     float3 Set_FinalBaseColor = lerp(_BaseColor_var,
         lerp(_Is_LightColor_1st_Shade_var,
@@ -183,18 +186,18 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
             Set_ShadeShadowMask), Set_FinalShadowMask);
 
 
-    float _Specular_var = 0.5 * dot(halfDirection, lerp(i.normalDir, normalDirection, _Is_NormalMapToHighColor)) + 0.5;
+    float specular = 0.5 * dot(halfDirection, lerp(i.normalDir, normalDirection, _Is_NormalMapToHighColor)) + 0.5;
     // Specular
-    float _TweakHighColorMask_var = (saturate((highlightMaskTex.g + _Tweak_HighColorMaskLevel)) * lerp(
-        (1.0 - step(_Specular_var, (1.0 - pow(abs(_HighColor_Power), 5)))),
-        pow(abs(_Specular_var), exp2(lerp(11, 1, _HighColor_Power))), _Is_SpecularToHighColor));
+    float tweakHighColorMask = (saturate((highlightMaskTex.g + _Tweak_HighColorMaskLevel)) * lerp(
+        (1.0 - step(specular, (1.0 - pow(abs(_HighColor_Power), 5)))),
+        pow(abs(specular), exp2(lerp(11, 1, _HighColor_Power))), _Is_SpecularToHighColor));
 
 
     float3 _HighColor_var = (lerp((highlightTex.rgb * _HighColor.rgb),
         ((highlightTex.rgb * _HighColor.rgb) * Set_LightColor),
-        _Is_LightColor_HighColor) * _TweakHighColorMask_var);
+        _Is_LightColor_HighColor) * tweakHighColorMask);
     //Composition: 3 Basic Colors and HighColor as Set_HighColor
-    float3 Set_HighColor = (lerp(SATURATE_IF_SDR((Set_FinalBaseColor - _TweakHighColorMask_var)), Set_FinalBaseColor,
+    float3 Set_HighColor = (lerp(SATURATE_IF_SDR((Set_FinalBaseColor - tweakHighColorMask)), Set_FinalBaseColor,
         lerp(_Is_BlendAddToHiColor, 1.0, _Is_SpecularToHighColor)) + lerp(_HighColor_var,
         (_HighColor_var * ((1.0 - Set_FinalShadowMask) + (Set_FinalShadowMask * _TweakHighColorOnShadow))),
         _Is_UseTweakHighColorOnShadow));
@@ -437,12 +440,12 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
     //v.2.0.5
     float3 Set_1st_ShadeColor = lerp((firstShadeAlbedo * _LightIntensity),(firstShadeAlbedo * Set_LightColor), _Is_LightColor_1st_Shade);
     float3 Set_2nd_ShadeColor = lerp((secondShadeAlbedo * _LightIntensity),(secondShadeAlbedo * Set_LightColor), _Is_LightColor_2nd_Shade);
-    float _HalfLambert_var = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
+    float halfLambert = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
 
     // float4 _Set_2nd_ShadePosition_var = tex2D(_Set_2nd_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_2nd_ShadePosition));
     // float4 _Set_1st_ShadePosition_var = tex2D(_Set_1st_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_1st_ShadePosition));
     // //v.2.0.5:
-    // float Set_FinalShadowMask = saturate((1.0 + ((lerp(_HalfLambert_var, (_HalfLambert_var*saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase) - (_1st_ShadeColor_Step - _1st_ShadeColor_Feather)) * ((1.0 - _Set_1st_ShadePosition_var.rgb).r - 1.0)) / (_1st_ShadeColor_Step - (_1st_ShadeColor_Step - _1st_ShadeColor_Feather))));
+    // float Set_FinalShadowMask = saturate((1.0 + ((lerp(halfLambert, (halfLambert*saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase) - (firstStepMinusFeather)) * ((1.0 - _Set_1st_ShadePosition_var.rgb).r - 1.0)) / (_1st_ShadeColor_Step - (firstStepMinusFeather))));
     //SGM
 
     //v.2.0.6
@@ -455,10 +458,10 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
                                           ? _ShadingGradeMap_var.r + _Tweak_ShadingGradeMapLevel
                                           : 1;
 
-    //float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var)*lerp( _HalfLambert_var, (_HalfLambert_var*saturate(_SystemShadowsLevel_var)), _Set_SystemShadowsToBase );
+    //float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var)*lerp( halfLambert, (halfLambert*saturate(_SystemShadowsLevel_var)), _Set_SystemShadowsToBase );
 
-    float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var) * lerp(_HalfLambert_var,
-        (_HalfLambert_var * saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase);
+    float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var) * lerp(halfLambert,
+        (halfLambert * saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase);
 
     //
     float Set_FinalShadowMask = saturate(
@@ -482,15 +485,15 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
             Set_FinalShadowMask);
     //v.2.0.6: Add HighColor if _Is_Filter_HiCutPointLightColor is False
 
-    float _Specular_var = 0.5 * dot(halfDirection, lerp(i.normalDir, normalDirection, _Is_NormalMapToHighColor)) + 0.5;
+    float specular = 0.5 * dot(halfDirection, lerp(i.normalDir, normalDirection, _Is_NormalMapToHighColor)) + 0.5;
     //  Specular
-    float _TweakHighColorMask_var = (saturate((highlightMaskTex.g + _Tweak_HighColorMaskLevel)) * lerp(
-        (1.0 - step(_Specular_var, (1.0 - pow(abs(_HighColor_Power), 5)))),
-        pow(abs(_Specular_var), exp2(lerp(11, 1, _HighColor_Power))), _Is_SpecularToHighColor));
+    float tweakHighColorMask = (saturate((highlightMaskTex.g + _Tweak_HighColorMaskLevel)) * lerp(
+        (1.0 - step(specular, (1.0 - pow(abs(_HighColor_Power), 5)))),
+        pow(abs(specular), exp2(lerp(11, 1, _HighColor_Power))), _Is_SpecularToHighColor));
 
     float3 _HighColor_var = (lerp((highlightTex.rgb * _HighColor.rgb),
         ((highlightTex.rgb * _HighColor.rgb) * Set_LightColor),
-        _Is_LightColor_HighColor) * _TweakHighColorMask_var);
+        _Is_LightColor_HighColor) * tweakHighColorMask);
 
     finalColor = finalColor + lerp(
         lerp(_HighColor_var,
@@ -556,12 +559,12 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
     //v.2.0.5
     float3 Set_1st_ShadeColor = lerp((firstShadeAlbedo * _LightIntensity),(firstShadeAlbedo * Set_LightColor), _Is_LightColor_1st_Shade);
     float3 Set_2nd_ShadeColor = lerp((secondShadeAlbedo * _LightIntensity),(secondShadeAlbedo * Set_LightColor), _Is_LightColor_2nd_Shade);
-    float _HalfLambert_var = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
+    float halfLambert = 0.5 * dot(lerp(i.normalDir, normalDirection, _Is_NormalMapToBase), lightDirection) + 0.5;
 
     // float4 _Set_2nd_ShadePosition_var = tex2D(_Set_2nd_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_2nd_ShadePosition));
     // float4 _Set_1st_ShadePosition_var = tex2D(_Set_1st_ShadePosition, TRANSFORM_TEX(Set_UV0, _Set_1st_ShadePosition));
     // //v.2.0.5:
-    // float Set_FinalShadowMask = saturate((1.0 + ((lerp(_HalfLambert_var, (_HalfLambert_var*saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase) - (_1st_ShadeColor_Step - _1st_ShadeColor_Feather)) * ((1.0 - _Set_1st_ShadePosition_var.rgb).r - 1.0)) / (_1st_ShadeColor_Step - (_1st_ShadeColor_Step - _1st_ShadeColor_Feather))));
+    // float Set_FinalShadowMask = saturate((1.0 + ((lerp(halfLambert, (halfLambert*saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase) - (firstStepMinusFeather)) * ((1.0 - _Set_1st_ShadePosition_var.rgb).r - 1.0)) / (_1st_ShadeColor_Step - (firstStepMinusFeather))));
     //SGM
 
     //v.2.0.6
@@ -574,10 +577,10 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
                                           ? _ShadingGradeMap_var.r + _Tweak_ShadingGradeMapLevel
                                           : 1;
 
-    //float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var)*lerp( _HalfLambert_var, (_HalfLambert_var*saturate(_SystemShadowsLevel_var)), _Set_SystemShadowsToBase );
+    //float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var)*lerp( halfLambert, (halfLambert*saturate(_SystemShadowsLevel_var)), _Set_SystemShadowsToBase );
 
-    float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var) * lerp(_HalfLambert_var,
-        (_HalfLambert_var * saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase);
+    float Set_ShadingGrade = saturate(_ShadingGradeMapLevel_var) * lerp(halfLambert,
+        (halfLambert * saturate(1.0 + _Tweak_SystemShadowsLevel)), _Set_SystemShadowsToBase);
 
 
     //
@@ -599,7 +602,7 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
     //         Set_1st_ShadeColor,
     //         Set_2nd_ShadeColor,
     //         saturate(
-    //            (1.0 + ((_HalfLambert_var - (_2nd_ShadeColor_Step - _2nd_Shades_Feather)) * ((1.0 - _Set_2nd_ShadePosition_var.rgb).r - 1.0)) / (_2nd_ShadeColor_Step - (_2nd_ShadeColor_Step - _2nd_Shades_Feather))))
+    //            (1.0 + ((halfLambert - (_2nd_ShadeColor_Step - _2nd_Shades_Feather)) * ((1.0 - _Set_2nd_ShadePosition_var.rgb).r - 1.0)) / (_2nd_ShadeColor_Step - (_2nd_ShadeColor_Step - _2nd_Shades_Feather))))
     //            ),
     //     Set_FinalShadowMask); // Final Color
 
@@ -618,15 +621,15 @@ void frag(VertexOutput i, out float4 finalRGBA : SV_Target0
             Set_FinalShadowMask);
     //v.2.0.6: Add HighColor if _Is_Filter_HiCutPointLightColor is False
 
-    float _Specular_var = 0.5 * dot(halfDirection, lerp(i.normalDir, normalDirection, _Is_NormalMapToHighColor)) + 0.5;
+    float specular = 0.5 * dot(halfDirection, lerp(i.normalDir, normalDirection, _Is_NormalMapToHighColor)) + 0.5;
     //  Specular
-    float _TweakHighColorMask_var = (saturate((highlightMaskTex.g + _Tweak_HighColorMaskLevel)) * lerp(
-        (1.0 - step(_Specular_var, (1.0 - pow(abs(_HighColor_Power), 5)))),
-        pow(abs(_Specular_var), exp2(lerp(11, 1, _HighColor_Power))), _Is_SpecularToHighColor));
+    float tweakHighColorMask = (saturate((highlightMaskTex.g + _Tweak_HighColorMaskLevel)) * lerp(
+        (1.0 - step(specular, (1.0 - pow(abs(_HighColor_Power), 5)))),
+        pow(abs(specular), exp2(lerp(11, 1, _HighColor_Power))), _Is_SpecularToHighColor));
 
     float3 _HighColor_var = (lerp((highlightTex.rgb * _HighColor.rgb),
         ((highlightTex.rgb * _HighColor.rgb) * Set_LightColor),
-        _Is_LightColor_HighColor) * _TweakHighColorMask_var);
+        _Is_LightColor_HighColor) * tweakHighColorMask);
 
     finalColor = finalColor + lerp(
         lerp(_HighColor_var,
