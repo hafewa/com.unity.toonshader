@@ -194,11 +194,13 @@ struct UtsLight {
 #endif
 };
 
+
+
 ///////////////////////////////////////////////////////////////////////////////
 //                      Light Abstraction                                    //
 /////////////////////////////////////////////////////////////////////////////
 
-half AdditionalLightRealtimeShadowUTS(int lightIndex, float3 positionWS, float4 positionCS) {
+half AdditionalLightRealtimeShadowUTS(int lightIndex, float3 positionWS) {
 #if defined(ADDITIONAL_LIGHT_CALCULATE_SHADOWS)
 
 
@@ -252,14 +254,14 @@ UtsLight GetUrpMainUtsLight() {
     return light;
 }
 
-UtsLight GetUrpMainUtsLight(float4 shadowCoord, float4 positionCS) {
+UtsLight GetUrpMainUtsLight(float4 shadowCoord) {
     UtsLight light = GetUrpMainUtsLight();
     light.shadowAttenuation = MainLightRealtimeShadow(shadowCoord);
     return light;
 }
 
 // Fills a light struct given a perObjectLightIndex
-UtsLight GetAdditionalPerObjectUtsLight(int perObjectLightIndex, float3 positionWS, float4 positionCS) {
+UtsLight GetAdditionalPerObjectUtsLight(int perObjectLightIndex, float3 positionWS) {
     // Abstraction over Light input constants
 #if USE_STRUCTURED_BUFFER_FOR_LIGHT_DATA
     float4 lightPositionWS = _AdditionalLightsBuffer[perObjectLightIndex].position;
@@ -293,7 +295,7 @@ UtsLight GetAdditionalPerObjectUtsLight(int perObjectLightIndex, float3 position
     UtsLight light;
     light.direction = lightDirection;
     light.distanceAttenuation = attenuation;
-    light.shadowAttenuation = AdditionalLightRealtimeShadowUTS(perObjectLightIndex, positionWS, positionCS);
+    light.shadowAttenuation = AdditionalLightRealtimeShadowUTS(perObjectLightIndex, positionWS);
     light.color = color;
     light.type = lightPositionWS.w;
 #ifdef _LIGHT_LAYERS
@@ -321,13 +323,13 @@ UtsLight GetAdditionalPerObjectUtsLight(int perObjectLightIndex, float3 position
 
 // Fills a light struct given a loop i index. This will convert the i
 // index to a perObjectLightIndex
-UtsLight GetAdditionalUtsLight(uint i, float3 positionWS, float4 positionCS) {
+UtsLight GetAdditionalUtsLight(uint i, float3 positionWS) {
 #if USE_FORWARD_PLUS
     int perObjectLightIndex = i;
 #else
     int perObjectLightIndex = GetPerObjectLightIndex(i);
 #endif
-    return GetAdditionalPerObjectUtsLight(perObjectLightIndex, positionWS, positionCS);
+    return GetAdditionalPerObjectUtsLight(perObjectLightIndex, positionWS);
 }
 
 half3 GetLightColor(UtsLight light
@@ -354,12 +356,12 @@ half3 GetLightColor(UtsLight light
             utslight.type = 0
 
 
-int DetermineUTS_MainLightIndex(float3 posW, float4 shadowCoord, float4 positionCS) {
+int DetermineUTS_MainLightIndex(float3 posW, float4 shadowCoord) {
     UtsLight mainLight;
     INIT_UTSLIGHT(mainLight);
 
     int mainLightIndex = MAINLIGHT_NOT_FOUND;
-    UtsLight nextLight = GetUrpMainUtsLight(shadowCoord, positionCS);
+    UtsLight nextLight = GetUrpMainUtsLight(shadowCoord);
     if (nextLight.distanceAttenuation > mainLight.distanceAttenuation && nextLight.type == 0)
     {
         mainLight = nextLight;
@@ -368,7 +370,7 @@ int DetermineUTS_MainLightIndex(float3 posW, float4 shadowCoord, float4 position
     int lightCount = GetAdditionalLightsCount();
     for (int ii = 0; ii < lightCount; ++ii)
     {
-        nextLight = GetAdditionalUtsLight(ii, posW, positionCS);
+        nextLight = GetAdditionalUtsLight(ii, posW);
         if (nextLight.distanceAttenuation > mainLight.distanceAttenuation && nextLight.type == 0)
         {
             mainLight = nextLight;
@@ -379,7 +381,7 @@ int DetermineUTS_MainLightIndex(float3 posW, float4 shadowCoord, float4 position
     return mainLightIndex;
 }
 
-UtsLight GetMainUtsLightByID(int index, float3 posW, float4 shadowCoord, float4 positionCS) {
+UtsLight GetMainUtsLightByID(int index, float3 posW, float4 shadowCoord) {
     UtsLight mainLight;
     INIT_UTSLIGHT(mainLight);
     if (index == MAINLIGHT_NOT_FOUND)
@@ -388,9 +390,9 @@ UtsLight GetMainUtsLightByID(int index, float3 posW, float4 shadowCoord, float4 
     }
     if (index == MAINLIGHT_IS_MAINLIGHT)
     {
-        return GetUrpMainUtsLight(shadowCoord, positionCS);
+        return GetUrpMainUtsLight(shadowCoord);
     }
-    return GetAdditionalUtsLight(index, posW, positionCS);
+    return GetAdditionalUtsLight(index, posW);
 }
 
 float4 GetShadowCoordUTS(VertexOutput v)
@@ -452,9 +454,9 @@ VertexOutput vert(VertexInput v) {
 #endif
     
 #if defined(_MAIN_LIGHT_SHADOWS) && !defined(_RECEIVE_SHADOWS_OFF)
-    o.mainLightID = DetermineUTS_MainLightIndex(o.posWorld.xyz, o.shadowCoord, positionCS);
+    o.mainLightID = DetermineUTS_MainLightIndex(o.posWorld.xyz, o.shadowCoord);
 #else
-    o.mainLightID = DetermineUTS_MainLightIndex(o.posWorld.xyz, 0, positionCS);
+    o.mainLightID = DetermineUTS_MainLightIndex(o.posWorld.xyz, 0);
 #endif
     
     return o;
